@@ -1,1 +1,272 @@
-<h1>Hello world!</h1>
+<!DOCTYPE html>
+<html>
+  <style> 
+    img {
+      padding: 10px 30px;
+    }
+
+    .axis-label {
+      text-anchor: middle;
+    }
+
+    .dropdowns {
+      margin-top: 50px;
+    }
+
+    .tooltip {
+      background-color: whitesmoke;
+      border: solid;
+      position: absolute;
+    }
+  </style>
+
+  <body onload="main()">
+    <div>
+        <h1>Earthquakes</h1> 
+        <img 
+          src='https://cdn.pixabay.com/photo/2011/12/13/14/31/earth-11015_1280.jpg'
+          width="200"
+          height="200"
+        >
+        <img 
+          src='https://upload.wikimedia.org/wikipedia/commons/thumb/d/db/Quake_epicenters_1963-98.png/600px-Quake_epicenters_1963-98.png'
+          width="300"
+          height="200"
+        >
+        <div id="introduction">
+            <h2>Introduction</h2>
+            <p>Earthquakes have been a core feature of our planet for much of its existence. Over the years, 
+                scientists have fine-tuned their methods used to collect earthquake data in the hopes of being able to better 
+                predict these powerful natural disasters before they strike. While no perfect solution exists to this day, 
+                we can keep studying earthquake data over the years in order to help in this endeavor.
+            </p>
+            <p>
+              The provided data showcases earthquakes that were recorded between the years 1800-present in the western United States. The earthquakes were measured
+              using the Richter scale, which evaluates the magnitude of an earthquake on a scale between 1-10. Earthquakes below 5.0 are generally considered to be
+              Light, usually consisting of shaking of indoor objects and miscellaneous rattling noises. Earthquakes above this threshold become increasingly more destructive,
+              with earthquakes 7.0+ resulting in damage to buildings, sometimes even leading to partial or complete collapses.
+            </p>
+        </div>
+    </div>
+
+    <div>
+      <h2>Data</h2>
+      <p>Hover over each data point in the chart to open a tooltip presenting more information about the earthquake.</p>
+       <!-- State selection and tsunami dropdowns -->
+      <div class="dropdowns">
+        <label><b>Filter By State:</b></label>
+        <select id="state-dropdown" selected="">
+          <option></option>
+          <option>California</option>
+          <option>Oregon</option>
+          <option>Washington</option>
+          <option>Nevada</option>
+          <option>Colorado</option>
+        </select>
+
+        <label style="padding-left: 10px;"><b>Caused Tsunami:</b></label>
+        <select id="tsunami-dropdown" selected="">
+          <option></option>
+          <option>Yes</option>
+          <option>No</option>
+        </select>
+      </div>
+
+      <!-- Chart canvas area -->
+      <div id="earthquakes-chart"></div>
+    </div>
+  </body>
+
+  <script src='https://d3js.org/d3.v5.min.js'></script>
+  <script>
+    // States shown on chart
+    const STATES = [
+      'California',
+      'Oregon',
+      'Washington',
+      'Nevada',
+      'Colorado',
+      'Arizona',
+      'New Mexico'
+    ]
+    // Main function to render chart
+    async function main() {
+      // Set up triggers
+      d3.select("#state-dropdown").on("change", function(d) { updateChart(); });
+
+      d3.select("#tsunami-dropdown").on("change", function(d) { updateChart(); });
+
+      // Set margins, width, and height
+      var SVG_WIDTH = 600;
+      var SVG_HEIGHT = 600;
+      
+      var CHART_MARGIN = 50;
+      var CHART_HEIGHT = 400;
+      var CHART_WIDTH = 400;
+
+      // Set up axes
+      var xAxis = d3.scaleLinear().domain([1800, 2020]).range([CHART_MARGIN, CHART_WIDTH]);
+      var yAxis = d3.scaleLinear().domain([1, 10]).range([CHART_HEIGHT, CHART_MARGIN]);
+      var magnitudeColor = d3.scaleSequential().domain([0,10]).interpolator(d3.interpolateLab('purple', 'red'));
+  
+      // Add SVG canvas
+      var svg = d3.select("#earthquakes-chart")
+                  .append("svg")
+                  .attr("width", SVG_WIDTH + 2*CHART_MARGIN)
+                  .attr("height", SVG_HEIGHT + 2*CHART_MARGIN)
+        
+      // Obtain earthquakes data
+      var data = await d3.csv('https://omidafshar.github.io/cs-416-dv-narrative-visualization/NOAA%20Earthquaqe%20since%201600.csv');
+
+      // Filter based on available states and those in years greater than 1800
+      data = data.filter(function (d) { 
+        var ret = false;
+        STATES.forEach(function (state) {
+          if (d.Name.startsWith(state.toUpperCase()) && Number(d.Year) > 1800 && d.Magnitude) {
+            ret = true;
+          }
+        });
+        return ret;
+      });
+
+      // Add Y-axis
+      svg.append("g")
+        .attr('transform', "translate(" + CHART_MARGIN + ",0)")
+        .call(d3.axisLeft(yAxis));
+      
+      // Add Y-axis label
+      svg.append("text")
+          .attr("y", CHART_MARGIN/2)
+          .attr("x",0-(CHART_MARGIN + CHART_HEIGHT/2))
+          .attr("transform", "rotate(-90)")
+          .attr('class', 'axis-label')
+          .text("Magnitude");  
+    
+      // Add X-axis
+      svg.append("g")
+        .attr("transform","translate(0," + CHART_HEIGHT + ")")
+        .call(d3.axisBottom(xAxis)
+                .tickFormat(function (d,i) { return d; })
+              );
+      
+      // Add X-axis label
+      svg.append("text")
+          .attr("y", CHART_MARGIN + CHART_HEIGHT)
+          .attr("x", CHART_WIDTH/ 2)
+          .attr('class', 'axis-label')
+          .text("Year");  
+
+      // Add the tooltip element
+      var tooltip = d3.select("#earthquakes-chart")
+        .append("div")
+        .style("opacity", 0)
+        .attr("class", "tooltip");
+
+      // Set up tooltip event handlers
+      var tooltipMouseOver = function(d) {
+        var date = d.Month + (d.Date ? ('/' + d.Date) : '') + '/' + d.Year;
+        tooltip.transition()
+               .duration(100)
+               .style("opacity", 1)
+               .text([
+                'Location: ' + d.Name,
+                'Date: ' + date,
+                'Magnitude: ' + d.Magnitude,
+               ].join('\n'));
+      }
+
+      var tooltipMouseMove = function(d) {
+        tooltip
+          .style('left', (d3.event.pageX + 10) + 'px')
+          .style('top', (d3.event.pageY + 10) + 'px')
+      }
+
+      var tooltipMouseOut = function(d) {
+        tooltip.transition()
+              .duration(100)
+              .style("opacity", 0)
+      }
+
+      // Add horizontal lines and annotations
+      svg.append("line")
+         .style("stroke", "black")
+         .attr('x1', xAxis(1800))
+         .attr('x2', xAxis(2020))
+         .attr('y1', yAxis(4.0))
+         .attr('y2', yAxis(4.0))
+
+      var minor = svg.append('g')
+                     .attr('transform', 'translate(' + (xAxis(2020) + 20) + ', ' + yAxis(2.5) + ')');
+
+      minor.append('text')
+           .text('Minor earthquakes (1.0-4.0)');
+
+      svg.append("line")
+         .style("stroke", "black")
+         .attr('x1', xAxis(1800))
+         .attr('x2', xAxis(2020))
+         .attr('y1', yAxis(7.0))
+         .attr('y2', yAxis(7.0))
+
+      var moderate = svg.append('g')
+                     .attr('transform', 'translate(' + (xAxis(2020) + 20) + ', ' + yAxis(5.5) + ')');
+
+      moderate.append('text')
+           .text('Moderate earthquakes (4.0-7.0)');
+
+      var major = svg.append('g')
+                     .attr('transform', 'translate(' + (xAxis(2020) + 20) + ', ' + yAxis(8.5) + ')');
+
+      major.append('text')
+           .text('Major earthquakes (7.0-10.0)');
+
+      // Call update chart to initially render the chart
+      updateChart();
+
+      // Updates the chart with any provided user filters when called
+      function updateChart() {
+        d3.selectAll('circle').remove();
+        // Filter data based on filter selections
+        var state = d3.select("#state-dropdown option:checked").text();
+
+        var tsunami = d3.select("#tsunami-dropdown option:checked").text();
+
+        var filteredData = data;
+
+        // If state string is empty, do not filter (no state has been selected)
+        if (state) {
+          filteredData = filteredData.filter(function (d) {
+            return d.Name.startsWith(state.toUpperCase());
+          });
+        }
+
+        // If tsunami string is empty, do not filter
+        if (tsunami) {
+          filteredData = filteredData.filter(function (d) {
+            if (tsunami === 'No') {
+              return d.Tsunami === tsunami || d.Tsunami === '';
+            } else {
+              return d.Tsunami === tsunami;
+            }
+          });
+        }
+
+        // Draw the circles from the data
+        svg.selectAll('circle')
+          .data(filteredData)
+          .enter()
+          .append('circle')
+          .attr('cx', function (d,i) { return xAxis(Number(d.Year)); })
+          .attr('cy', function (d,i) { return yAxis(Number(d.Magnitude)); })
+          .attr('r', 5)
+          .style("fill", function(d,i) { return magnitudeColor(Number(d.Magnitude)); });
+
+        // Attach tooltip callbacks
+        svg.selectAll('circle')
+           .on('mousemove', tooltipMouseMove)
+           .on('mouseout', tooltipMouseOut)
+           .on('mouseover', tooltipMouseOver)
+      }
+  }
+  </script>
+</html>
